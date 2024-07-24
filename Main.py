@@ -5,16 +5,57 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
+from mediapipe import solutions
 
 cam = cv.VideoCapture(0)
 
 base_options = python.BaseOptions(model_asset_path=r'C:\Users\user\Downloads\gesture_recognizer.task')
-options = vision.GestureRecognizerOptions(base_options=base_options)
+options = vision.GestureRecognizerOptions(base_options=base_options, num_hands = 2)
 recognizer = vision.GestureRecognizer.create_from_options(options)
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
+
+FONT_SIZE = 1
+FONT_THICKNESS = 1
+HANDEDNESS_TEXT_COLOR = (88, 205, 54)
+
+def draw_landmarks_on_image(rgb_image, detection_result):
+    hand_landmarks_list = detection_result.hand_landmarks
+    handedness_list = detection_result.handedness
+    annotated_image = np.copy(rgb_image)
+
+  # Loop through the detected hands to visualize.
+    for idx in range(len(hand_landmarks_list)):
+        hand_landmarks = hand_landmarks_list[idx]
+        handedness = handedness_list[idx]
+
+        # Draw the hand landmarks.
+        hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
+        hand_landmarks_proto.landmark.extend([
+          landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in hand_landmarks
+        ])
+        solutions.drawing_utils.draw_landmarks(
+          annotated_image,
+          hand_landmarks_proto,
+          solutions.hands.HAND_CONNECTIONS,
+          solutions.drawing_styles.get_default_hand_landmarks_style(),
+          solutions.drawing_styles.get_default_hand_connections_style())
+
+        # Get the top left corner of the detected hand's bounding box.
+        height, width, _ = annotated_image.shape
+        x_coordinates = [landmark.x for landmark in hand_landmarks]
+        y_coordinates = [landmark.y for landmark in hand_landmarks]
+        text_x = int(min(x_coordinates) * width)
+        text_y = int(min(y_coordinates) * height) - 10
+
+        # Draw handedness (left or right hand) on the image.
+        cv.putText(annotated_image, f"{detection_result.gestures[0][0].category_name}",
+                    (text_x, text_y), cv.FONT_HERSHEY_DUPLEX,
+                    FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv.LINE_AA)
+
+    return annotated_image
 
 while True:
     success, frame = cam.read()
@@ -26,9 +67,12 @@ while True:
     recognition_result = recognizer.recognize(image)
     if recognition_result.gestures:
         print(recognition_result.gestures[0][0].category_name)
-        
-    
+        image_with_handlanmarks = draw_landmarks_on_image(frame, recognition_result)
+        cv.imshow("axuy", image_with_handlanmarks)
+    else:
+        cv.imshow("axuy", frame)
     cv.imshow("Camera", frame)
+    
     key = cv.waitKey(30) 
     if (key != -1):
         if chr(key) == 'p':
